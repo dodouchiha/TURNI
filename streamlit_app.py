@@ -28,10 +28,12 @@ def is_ambulatorio(data):
     return data.weekday() in [0, 2, 4] and data.date() not in festivi_it
 
 # DataFrame base
+giorni_series = pd.Series(giorni_mese)
+
 df = pd.DataFrame({
     "Data": giorni_mese,
     "Giorno": giorni_mese.strftime("%A"),
-    "Festivo": giorni_mese.date.isin(festivi_it),
+    "Festivo": giorni_series.dt.date.isin(festivi_it),
     "Nome Festivo": [festivi_it.get(d.date(), "") for d in giorni_mese],
     "Mattina": "",
     "Pomeriggio": "",
