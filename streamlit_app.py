@@ -4,9 +4,71 @@ import calendar
 from datetime import datetime
 import holidays
 from io import BytesIO
+import requests
+import json
+import streamlit as st
 
 # Titolo
 st.title("🗓️ Pianificazione Turni Mensili con Assenze per Medico")
+
+# ⚙️ CONFIGURAZIONE - personalizza questi valori
+GITHUB_USER = "dodouchiha"
+REPO_NAME = "turni"
+FILE_PATH = "medici.json"
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]  # 🔐 sicuro via Streamlit secrets
+
+# URL API GitHub REST
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{FILE_PATH}"
+
+# Carica il contenuto attuale da GitHub
+def carica_medici_da_github():
+    res = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    if res.status_code == 200:
+        contenuto = res.json()
+        file_sha = contenuto["sha"]
+        elenco = json.loads(requests.get(contenuto["download_url"]).text)
+        return elenco, file_sha
+    else:
+        # Se il file non esiste, inizializza con default
+        return ["Dr. Rossi", "Dr. Bianchi"], None
+
+# Salva su GitHub (con SHA per versionamento)
+def salva_medici_su_github(nuovo_elenco, sha=None):
+    messaggio = "Update elenco medici da Streamlit"
+    dati = {
+        "message": messaggio,
+        "content": json.dumps(nuovo_elenco, indent=2).encode("utf-8").decode("utf-8"),
+        "branch": "main"
+    }
+    if sha:
+        dati["sha"] = sha
+    r = requests.put(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=dati)
+    return r.status_code in [200, 201]
+
+# 🔁 Carica l'elenco iniziale e SHA
+elenco_medici, sha_file = carica_medici_da_github()
+
+# Sidebar gestione
+st.sidebar.header("👨‍⚕️ Gestione Medici (GitHub)")
+with st.sidebar.form("form_medico"):
+    nuovo = st.text_input("➕ Aggiungi medico")
+    if st.form_submit_button("Aggiungi") and nuovo:
+        if nuovo not in elenco_medici:
+            elenco_medici.append(nuovo)
+            salva_medici_su_github(elenco_medici, sha_file)
+            st.experimental_rerun()
+        else:
+            st.sidebar.warning("Già presente.")
+
+# Rimozione
+rimuovi = st.sidebar.selectbox("🗑️ Rimuovi medico", [""] + elenco_medici)
+if rimuovi and st.sidebar.button("Rimuovi"):
+    elenco_medici.remove(rimuovi)
+    salva_medici_su_github(elenco_medici, sha_file)
+    st.experimental_rerun()
+
+# Multiselect
+medici = st.sidebar.multiselect("✅ Seleziona medici da pianificare:", elenco_medici, default=elenco_medici)
 
 # Selezione medici
 st.sidebar.header("👨‍⚕️ Selezione Medici")
